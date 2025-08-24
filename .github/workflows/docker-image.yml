@@ -1,0 +1,44 @@
+name: Build and Release Docker Image
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Docker Image Tag (z.B. v1.0.0)'
+        required: true
+        default: 'manual-build'
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          push: false
+          build-args: SOURCE_COMMIT=${{ github.sha }}
+          tags: myvalheim:${{ github.event.inputs.image_tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Save Docker image to tarball
+        run: docker save -o docker-image.tar myvalheim:${{ github.event.inputs.image_tag }}
+
+      - name: Create GitHub Release with Image
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.image_tag }}
+          name: Release ${{ github.event.inputs.image_tag }}
+          files: docker-image.tar
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
